@@ -1,20 +1,20 @@
 libraryDependencies <++= (scalaVersion) { scalaVersion =>
-  val liftVersion = "2.6"
+  val liftVersion = "3.0-SNAPSHOT"
   def sv(s: String) = s + "_" + (scalaVersion match {
-      case "2.11.5" => "2.11"
+      case "2.11.7" => "2.11"
       case "2.10.4" => "2.10"
   })
   Seq(
-    "net.liftweb"              % sv("lift-util")           % liftVersion  % "compile" intransitive(),
-    "net.liftweb"              % sv("lift-common")         % liftVersion  % "compile" intransitive(),
-    "net.liftweb"              % sv("lift-record")         % liftVersion  % "compile" intransitive(),
-    "net.liftweb"              % sv("lift-mongodb-record") % liftVersion  % "compile" intransitive(),
-    "net.liftweb"              % sv("lift-mongodb")        % liftVersion  % "compile" intransitive(),
-    "net.liftweb"              % sv("lift-webkit")         % liftVersion  % "compile" intransitive(),
-    "net.liftweb"              % sv("lift-json")           % liftVersion  % "compile",
+    "com.github.zaza81"              % sv("lift-util")           % liftVersion  % "compile" intransitive(),
+    "com.github.zaza81"              % sv("lift-common")         % liftVersion  % "compile" intransitive(),
+    "com.github.zaza81"              % sv("lift-record")         % liftVersion  % "compile" intransitive(),
+    "com.github.zaza81"              % sv("lift-mongodb-record") % liftVersion  % "compile" intransitive(),
+    "com.github.zaza81"              % sv("lift-mongodb")        % liftVersion  % "compile" intransitive(),
+    "com.github.zaza81"              % sv("lift-webkit")         % liftVersion  % "compile" intransitive(),
+    "com.github.zaza81"              % sv("lift-json")           % liftVersion  % "compile",
     "joda-time"                % "joda-time"               % "2.1"        % "compile",
     "org.joda"                 % "joda-convert"            % "1.2"        % "compile",
-    "org.mongodb"              % "mongo-java-driver"       % "2.12.5"     % "compile")
+    "org.mongodb"              % "mongodb-driver"       % "3.2.2"     % "compile")
 }
 
 Seq(RogueBuild.defaultSettings: _*)

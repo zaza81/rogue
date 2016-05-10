@@ -8,6 +8,9 @@ import com.foursquare.rogue.Iter._
 import com.mongodb.{BasicDBObject, BasicDBObjectBuilder, CommandResult, DBCollection,
   DBCursor, DBObject, ReadPreference, WriteConcern}
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.blocking
+import com.foursquare.rogue.MongoHelpers.MongoBuilder._
+import com.foursquare.rogue.QueryHelpers._
 
 trait DBCollectionFactory[MB] {
   def getDBCollection[M <: MB](query: Query[M, _, _]): DBCollection
@@ -29,8 +32,9 @@ class MongoJavaDriverAdapter[MB](dbCollectionFactory: DBCollectionFactory[MB]) {
     val start = System.nanoTime
     val instanceName: String = dbCollectionFactory.getInstanceName(query)
     try {
-      logger.onExecuteQuery(query, instanceName, description, f)
-    } catch {
+      blocking {
+               logger.onExecuteQuery(query, instanceName, description, f)
+              }    } catch {
       case e: Exception =>
         throw new RogueException("Mongo query on %s [%s] failed after %d ms".
                                  format(instanceName, description,
@@ -53,13 +57,15 @@ class MongoJavaDriverAdapter[MB](dbCollectionFactory: DBCollectionFactory[MB]) {
       cmd.put("count", query.collectionName)
       cmd.put("query", condition)
 
-      queryClause.lim.filter(_ > 0).foreach( cmd.put("limit", _) )
-      queryClause.sk.filter(_ > 0).foreach( cmd.put("skip", _) )
+
+      queryClause.lim.filter(_ > 0).foreach( x => cmd.put("limit", x.asInstanceOf[AnyRef]) )
+       queryClause.sk.filter(_ > 0).foreach( x=> cmd.put("skip",  x.asInstanceOf[AnyRef]) )
 
       // 4sq dynamically throttles ReadPreference via an override of
       // DBCursor creation.  We don't want to override for the whole
       // DBCollection because those are cached for the life of the DB
-      val result: CommandResult = db.command(cmd, coll.getOptions, readPreference.getOrElse(coll.find().getReadPreference))
+      //val result: CommandResult = db.command(cmd, coll.getOptions, readPreference.getOrElse(coll.find().getReadPreference))
+      val result: CommandResult = db.command(cmd, readPreference.getOrElse(coll.find().getReadPreference))
       if (!result.ok) {
         result.getErrorMessage match {
           // pretend count is zero craziness from the mongo-java-driver

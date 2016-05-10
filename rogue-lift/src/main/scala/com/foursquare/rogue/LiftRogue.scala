@@ -49,7 +49,8 @@ trait LiftRogue extends Rogue {
     (implicit ev: ShardingOk[M with MongoMetaRecord[_], State]): ExecutableQuery[MongoRecord[_] with MongoMetaRecord[_], M with MongoMetaRecord[_], R, State] = {
     ExecutableQuery(
         query.asInstanceOf[Query[M with MongoMetaRecord[_], R, State]],
-        LiftQueryExecutor
+        LiftQueryExecutor,
+        LiftAsyncQueryExecutor
     )
   }
 
@@ -58,7 +59,8 @@ trait LiftRogue extends Rogue {
   ): ExecutableModifyQuery[MongoRecord[_] with MongoMetaRecord[_], M with MongoMetaRecord[_], State] = {
     ExecutableModifyQuery(
         query.asInstanceOf[ModifyQuery[M with MongoMetaRecord[_], State]],
-        LiftQueryExecutor
+        LiftQueryExecutor,
+        LiftAsyncQueryExecutor
     )
   }
 
@@ -67,7 +69,8 @@ trait LiftRogue extends Rogue {
   ): ExecutableFindAndModifyQuery[MongoRecord[_] with MongoMetaRecord[_], M with MongoMetaRecord[_], R] = {
     ExecutableFindAndModifyQuery(
         query.asInstanceOf[FindAndModifyQuery[M with MongoMetaRecord[_], R]],
-        LiftQueryExecutor
+        LiftQueryExecutor,
+        LiftAsyncQueryExecutor
     )
   }
 

@@ -91,7 +91,7 @@ object QueryHelpers {
   }
 
   class DefaultQueryConfig extends QueryConfig {
-    override def defaultWriteConcern = WriteConcern.NONE
+    override def defaultWriteConcern = WriteConcern.UNACKNOWLEDGED
   }
 
   object DefaultQueryConfig extends DefaultQueryConfig

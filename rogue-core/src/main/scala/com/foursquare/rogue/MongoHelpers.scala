@@ -2,7 +2,10 @@
 
 package com.foursquare.rogue
 
-import com.mongodb.{BasicDBObjectBuilder, DBObject}
+import com.mongodb.{BasicDBObject, BasicDBObjectBuilder, DBObject}
+import org.bson.BsonDocument
+import org.bson.conversions.Bson
+
 import scala.collection.immutable.ListMap
 
 object MongoHelpers extends Rogue {
@@ -19,39 +22,39 @@ object MongoHelpers extends Rogue {
   sealed case class MongoSelect[M, R](fields: List[SelectField[_, M]], transformer: List[Any] => R)
 
   object MongoBuilder {
-    def buildCondition(cond: AndCondition, signature: Boolean = false): DBObject = {
+    def buildCondition(cond: AndCondition, signature: Boolean = false): BasicDBObject = {
       buildCondition(cond, BasicDBObjectBuilder.start, signature)
     }
 
     def buildCondition(cond: AndCondition,
                        builder: BasicDBObjectBuilder,
-                       signature: Boolean): DBObject = {
+                       signature: Boolean): BasicDBObject = {
       val (rawClauses, safeClauses) = cond.clauses.partition(_.isInstanceOf[RawQueryClause])
 
       // Normal clauses
       safeClauses.groupBy(_.fieldName).toList
-          .sortBy{ case (fieldName, _) => -cond.clauses.indexWhere(_.fieldName == fieldName) }
-          .foreach{ case (name, cs) => {
-        // Equality clauses look like { a : 3 }
-        // but all other clauses look like { a : { $op : 3 }}
-        // and can be chained like { a : { $gt : 2, $lt: 6 }}.
-        // So if there is any equality clause, apply it (only) to the builder;
-        // otherwise, chain the clauses.
-        cs.filter(_.isInstanceOf[EqClause[_, _]]).headOption match {
-          case Some(eqClause) => eqClause.extend(builder, signature)
-          case None => {
-            builder.push(name)
-            val (negative, positive) = cs.partition(_.negated)
-            positive.foreach(_.extend(builder, signature))
-            if (negative.nonEmpty) {
-              builder.push("$not")
-              negative.foreach(_.extend(builder, signature))
+        .sortBy{ case (fieldName, _) => -cond.clauses.indexWhere(_.fieldName == fieldName) }
+        .foreach{ case (name, cs) => {
+          // Equality clauses look like { a : 3 }
+          // but all other clauses look like { a : { $op : 3 }}
+          // and can be chained like { a : { $gt : 2, $lt: 6 }}.
+          // So if there is any equality clause, apply it (only) to the builder;
+          // otherwise, chain the clauses.
+          cs.filter(_.isInstanceOf[EqClause[_, _]]).headOption match {
+            case Some(eqClause) => eqClause.extend(builder, signature)
+            case None => {
+              builder.push(name)
+              val (negative, positive) = cs.partition(_.negated)
+              positive.foreach(_.extend(builder, signature))
+              if (negative.nonEmpty) {
+                builder.push("$not")
+                negative.foreach(_.extend(builder, signature))
+                builder.pop
+              }
               builder.pop
             }
-            builder.pop
           }
-        }
-      }}
+        }}
 
       // Raw clauses
       rawClauses.foreach(_.extend(builder, signature))
@@ -59,30 +62,30 @@ object MongoHelpers extends Rogue {
       // Optional $or clause (only one per "and" chain)
       cond.orCondition.foreach(or => {
         val subclauses = or.conditions
-            .map(buildCondition(_, signature))
-            .filterNot(_.keySet.isEmpty)
+          .map(buildCondition(_, signature))
+          .filterNot(_.keySet.isEmpty)
         builder.add("$or", QueryHelpers.list(subclauses))
       })
-      builder.get
+      builder.get.asInstanceOf[BasicDBObject]
     }
 
-    def buildOrder(o: MongoOrder): DBObject = {
+    def buildOrder(o: MongoOrder): BasicDBObject = {
       val builder = BasicDBObjectBuilder.start
       o.terms.reverse.foreach { case (field, ascending) => builder.add(field, if (ascending) 1 else -1) }
-      builder.get
+      builder.get.asInstanceOf[BasicDBObject]
     }
 
-    def buildModify(m: MongoModify): DBObject = {
+    def buildModify(m: MongoModify): BasicDBObject = {
       val builder = BasicDBObjectBuilder.start
       m.clauses.groupBy(_.operator).foreach{ case (op, cs) => {
         builder.push(op.toString)
         cs.foreach(_.extend(builder))
         builder.pop
       }}
-      builder.get
+      builder.get().asInstanceOf[BasicDBObject]
     }
 
-    def buildSelect[M, R](select: MongoSelect[M, R]): DBObject = {
+    def buildSelect[M, R](select: MongoSelect[M, R]): BasicDBObject = {
       val builder = BasicDBObjectBuilder.start
       // If select.fields is empty, then a MongoSelect clause exists, but has an empty
       // list of fields. In this case (used for .exists()), we select just the
@@ -98,8 +101,27 @@ object MongoHelpers extends Rogue {
           }
         })
       }
-      builder.get
+      builder.get.asInstanceOf[BasicDBObject]
     }
+
+    /*def buildSelectBson[M, R](select: MongoSelect[M, R]): Bson = {
+      val builder = new BsonDocument()
+      // If select.fields is empty, then a MongoSelect clause exists, but has an empty
+      // list of fields. In this case (used for .exists()), we select just the
+      // _id field.
+      if (select.fields.isEmpty) {
+        builder.append("_id", 1)
+      } else {
+        select.fields.foreach(f => {
+          f.slc match {
+            case None => builder.add(f.field.name, 1)
+            case Some((s, None)) => builder.push(f.field.name).add("$slice", s).pop()
+            case Some((s, Some(e))) => builder.push(f.field.name).add("$slice", QueryHelpers.makeJavaList(List(s, e))).pop()
+          }
+        })
+      }
+      builder.get
+    }*/
 
     def buildHint(h: ListMap[String, Any]): DBObject = {
       val builder = BasicDBObjectBuilder.start
@@ -150,7 +172,7 @@ object MongoHelpers extends Rogue {
     def buildFindAndModifyString[R, M](collectionName: String, mod: FindAndModifyQuery[M, R], returnNew: Boolean, upsert: Boolean, remove: Boolean): String = {
       val query = mod.query
       val sb = new StringBuilder("db.%s.findAndModify({ query: %s".format(
-          collectionName, stringFromDBObject(buildCondition(query.condition))))
+        collectionName, stringFromDBObject(buildCondition(query.condition))))
       query.order.foreach(o => sb.append(", sort: " + buildOrder(o).toString))
       if (remove) sb.append(", remove: true")
       sb.append(", update: " + stringFromDBObject(buildModify(mod.mod)))
